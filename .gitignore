@@ -1,0 +1,9 @@
+# Project ignores (will be updated as the project progresses)
+
+# Ignore the images folder
+image/
+
+# Ignore the guideline document
+guideline.txt
+
+
