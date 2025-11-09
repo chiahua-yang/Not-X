@@ -6,7 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 
 // const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-const IDLE_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+const IDLE_TIMEOUT = 2 * 60 * 1000; // 10 minutes
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
