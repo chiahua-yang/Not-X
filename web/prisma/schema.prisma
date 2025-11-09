@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  userId       String?  @unique // set after OAuth signup flow
+  name         String?
+  displayName  String?
+  image        String?  // avatar URL
+  coverImage   String?  // cover/banner image URL
+  bio          String?  @db.Text
+  email        String?  @unique
+  emailVerified DateTime?
+
+  // counts (optional denormalized fields)
+  postsCount     Int      @default(0)
+  followersCount Int      @default(0)
+  followingCount Int      @default(0)
+
+  // relations
+  accounts     Account[]
+  sessions     Session[]
+  posts        Post[]     @relation("UserPosts")
+  drafts       Draft[]
+  likes        PostLike[]
+  reposts      Repost[]
+  following    Follow[]   @relation("Following")
+  followers    Follow[]   @relation("Followers")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  authorId  String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Recursive thread structure: a post may be a reply to another post
+  parentId String? // when set, this post is a comment/reply to parent post
+  parent   Post?   @relation("PostToComments", fields: [parentId], references: [id])
+  comments Post[]  @relation("PostToComments")
+
+  author   User    @relation("UserPosts", fields: [authorId], references: [id], onDelete: Cascade)
+  likes    PostLike[]
+  reposts  Repost[]
+
+  @@index([createdAt])
+  @@index([authorId])
+}
+
+model PostLike {
+  id      String   @id @default(cuid())
+  userId  String
+  postId  String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+}
+
+model Repost {
+  id      String   @id @default(cuid())
+  userId  String
+  postId  String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+}
+
+model Follow {
+  id            String   @id @default(cuid())
+  followerId    String
+  followingId   String
+  createdAt     DateTime @default(now())
+
+  follower  User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+model Draft {
+  id        String   @id @default(cuid())
+  userId    String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+
