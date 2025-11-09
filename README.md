@@ -1,41 +1,41 @@
-﻿# X-Clone å°ˆæ¡ˆå•Ÿå‹•æŒ‡å—
+# X-Clone 專案啟動指南
 
-é€™æ˜¯ä¸€å€‹æ¨¡ä»¿ Twitter/X æ ¸å¿ƒåŠŸèƒ½çš„ä½œæ¥­å°ˆæ¡ˆï¼Œå®Œæ•´ç¨‹å¼ä½æ–¼ web/ ç›®éŒ„ã€‚å°ˆæ¡ˆä½¿ç”¨ Next.js App Routerã€NextAuthã€Prisma èˆ‡ PostgreSQLï¼Œä¸¦å¯¦ä½œ OAuth ç™»å…¥ã€ä½¿ç”¨è€… @userID è¨­å®šã€è²¼æ–‡/ç•™è¨€/æŒ‰è®š/è½‰ç™¼ç­‰åŠŸèƒ½ã€‚
+這是一個模仿 Twitter/X 核心功能的作業專案，完整程式位於 `web/` 目錄。專案使用 Next.js App Router、NextAuth、Prisma 與 PostgreSQL，並實作 OAuth 登入、使用者 `@userID` 設定、貼文/留言/按讚/轉發等功能。
 
-## ç›®éŒ„çµæ§‹
+## 目錄結構
 
-`
+```
 hw5/
-â”œâ”€â”€ README.md               # æœ¬æ–‡ä»¶
-â”œâ”€â”€ .gitignore              # Git å¿½ç•¥è¦å‰‡
-â”œâ”€â”€ image/                  # ä½œæ¥­æä¾›çš„ UI åƒè€ƒåœ– (å·²åŠ å…¥ .gitignore)
-â”œâ”€â”€ guideline.txt           # ä½œæ¥­èªªæ˜Žæª”æ¡ˆ (å·²åŠ å…¥ .gitignore)
-â””â”€â”€ web/                    # Next.js + Prisma + NextAuth åŽŸå§‹ç¢¼
-`
+├── README.md               # 本文件
+├── .gitignore              # Git 忽略規則
+├── image/                  # 作業提供的 UI 參考圖（已加入 .gitignore）
+├── guideline.txt           # 作業說明檔案（已加入 .gitignore）
+└── web/                    # Next.js + Prisma + NextAuth 原始碼
+```
 
-## æŠ€è¡“å †ç–Š
+## 技術堆疊
 
-- Next.js 16 (App Router)
+- Next.js 16（App Router）
 - TypeScript
 - Tailwind CSS v4
-- NextAuthï¼ˆGoogle / GitHub / Facebook OAuthï¼‰
+- NextAuth（Google / GitHub OAuth）
 - Prisma ORM + PostgreSQL
-- RESTful APIï¼ˆè²¼æ–‡ã€ç•™è¨€ã€æ„›å¿ƒã€è½‰ç™¼ã€è¿½è¹¤ã€è‰ç¨¿ï¼‰
-- è¦åŠƒæ•´åˆ Pusher é€²è¡Œå³æ™‚åŒæ­¥
+- RESTful API（貼文、留言、愛心、轉發、追蹤、草稿）
+- 規劃整合 Pusher 進行即時同步
 
-## äº‹å‰æº–å‚™
+## 事前準備
 
-1. Node.js 20 ä»¥ä¸Šç‰ˆæœ¬ï¼ˆå»ºè­°æ­é… npmï¼‰
-2. PostgreSQL 14 ä»¥ä¸Šï¼Œæˆ–å¯é€£ç·šçš„é›²ç«¯è³‡æ–™åº«
-3. Google / GitHub / Facebook OAuth æ†‘è­‰å„ä¸€çµ„
+1. Node.js 20 以上版本（建議搭配 npm）
+2. PostgreSQL 14 以上，或可連線的雲端資料庫
+3. Google / GitHub OAuth 憑證各一組
 
-## å»ºç«‹ç’°å¢ƒè®Šæ•¸
+## 建立環境變數
 
-åœ¨ web/.env å»ºç«‹ä»¥ä¸‹å…§å®¹ï¼ˆè«‹å‹¿æäº¤è‡³ Gitï¼‰ï¼š
+在 `web/.env` 建立以下內容（請勿提交至 Git）：
 
-`
+```
 NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=è«‹è‡ªè¡Œç”¢ç”Ÿçš„å®‰å…¨éš¨æ©Ÿå­—ä¸²
+NEXTAUTH_SECRET=請自行產生的安全隨機字串
 
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public
 
@@ -43,79 +43,71 @@ GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
-FACEBOOK_CLIENT_ID=
-FACEBOOK_CLIENT_SECRET=
-`
+```
 
-- ç”¢ç”Ÿ NEXTAUTH_SECRETï¼š
-  `ash
+- 產生 `NEXTAUTH_SECRET`：
+  ```bash
   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-  `
-- DATABASE_URL è«‹æ›¿æ›ç‚ºå¯¦éš›çš„ PostgreSQL é€£ç·šå­—ä¸²ã€‚
+  ```
+- `DATABASE_URL` 請替換為實際的 PostgreSQL 連線字串。
 
-### OAuth å›žå‘¼ç¶²å€ (æœ¬æ©Ÿé–‹ç™¼)
+### OAuth 回呼網址（本機開發）
 
-| Provider | è¨­å®šå…¥å£ | Callback URL |
+| Provider | 設定入口 | Callback URL |
 |----------|----------|--------------|
-| Google   | Google Cloud Console â†’ Credentials | http://localhost:3000/api/auth/callback/google |
-| GitHub   | GitHub â†’ Settings â†’ Developer settings â†’ OAuth Apps | http://localhost:3000/api/auth/callback/github |
-| Facebook | Meta for Developers â†’ Products â†’ Facebook Login â†’ Settings | http://localhost:3000/api/auth/callback/facebook |
+| Google   | Google Cloud Console → Credentials | `http://localhost:3000/api/auth/callback/google` |
+| GitHub   | GitHub → Settings → Developer settings → OAuth Apps | `http://localhost:3000/api/auth/callback/github` |
 
-éƒ¨ç½²æ­£å¼ç’°å¢ƒæ™‚ï¼Œè«‹æ”¹ç”¨å¯¦éš›ç¶²åŸŸä¸¦åŒæ­¥æ›´æ–° OAuth è¨­å®šã€‚
+部署正式環境時，請改用實際網域並同步更新 OAuth 設定。
 
-## å®‰è£èˆ‡å•Ÿå‹•
+## 安裝與啟動
 
-`ash
+```bash
 cd web
-npm install                # å®‰è£ç›¸ä¾å¥—ä»¶
+npm install                # 安裝相依套件
 
-npx prisma migrate dev     # å¥—ç”¨ Prisma schemaï¼Œå»ºç«‹è³‡æ–™è¡¨
-# npx prisma generate      # å¦‚éœ€æ‰‹å‹•é‡æ–°ç”¢ç”Ÿ Prisma Client
+npx prisma migrate dev     # 套用 Prisma schema，建立資料表
+# npx prisma generate      # 如需手動重新產生 Prisma Client
 
-npm run dev                # å•Ÿå‹• Next.js é–‹ç™¼ä¼ºæœå™¨
-`
+npm run dev                # 啟動 Next.js 開發伺服器
+```
 
-ç€è¦½ http://localhost:3000ï¼š
-- æœªç™»å…¥ â†’ é¡¯ç¤ºç™»å…¥å‰ Landing Pageï¼Œå¯é¸æ“‡ OAuth Providerã€‚
-- å·²ç™»å…¥ â†’ æœƒè‡ªå‹•å°Žå‘ /home ä¸¦é¡¯ç¤ºå« Sidebar çš„ä¸»ç•«é¢ã€‚
+瀏覽 `http://localhost:3000`：
+- 未登入 → 顯示登入前 Landing Page，可選擇 OAuth Provider。
+- 已登入 → 會自動導向 `/home` 並顯示含 Sidebar 的主畫面。
 
-## æ ¸å¿ƒåŠŸèƒ½æ‘˜è¦
+## 核心功能摘要
 
-- **ç™»å…¥æµç¨‹**ï¼šç™»å‡º/æœªç™»å…¥æ™‚é€²å…¥ Landing Pageï¼Œä½¿ç”¨ Google/GitHub/Facebook OAuthã€‚ç™»å…¥å¾Œè‹¥å°šæœªè¨­å®š @userIDï¼Œæœƒè¢«å°Žå‘ setup-usernameã€‚
-- **ä½¿ç”¨è€…ä»£è™Ÿé©—è­‰**ï¼š@userID åƒ…å…è¨± 3â€“15 å€‹å°å¯«å­—æ¯æˆ–åº•ç·šï¼Œè¼¸å…¥æ™‚å³æ™‚æª¢æŸ¥æ ¼å¼èˆ‡æ˜¯å¦è¢«å ç”¨ï¼Œä¸¦æä¾›æŽ¨è–¦é¸é …ã€‚
-- **é¦–é  (Home)**ï¼šå…· All / Following ç¯©é¸ã€è²¼æ–‡æ™‚é–“æŽ’åºã€ç•™è¨€/æŒ‰è®š/è½‰ç™¼/åˆªé™¤ã€è‡ªå‹•å±•é–‹ç•™è¨€ã€æ”¯æ´éžè¿´è·¯ç”±é€²å…¥å–®ç¯‡è²¼æ–‡æˆ–ç•™è¨€ä¸²ã€‚
-- **ç™¼æ–‡ (Post)**ï¼šModal èˆ‡ inline composerï¼Œéµå®ˆ 280 å­—ä¸Šé™ï¼›ç¶²å€è¨ˆç®— 23 å­—å…ƒï¼›Hashtag/Mention ä¸è¨ˆå­—æ•¸ï¼›å¯å„²å­˜ Draftã€‚
-- **å€‹äººé  (Profile)**ï¼šå€åˆ†è‡ªå·±èˆ‡ä»–äººè¦–åœ–ï¼ŒåŒ…å« Follow / Followingã€è²¼æ–‡/å–œæ­¡æ¸…å–®ã€ç·¨è¼¯å€‹äººè³‡æ–™ Modalã€‚
-- **è‡ªå‹•ç™»å‡º**ï¼šä½¿ç”¨è€… 30 åˆ†é˜å…§ç„¡æ“ä½œï¼ˆå¯æ–¼ LayoutWrapper.tsx èª¿æ•´ IDLE_TIMEOUTï¼‰å¾Œï¼Œä¸‹æ¬¡äº’å‹•æœƒè‡ªå‹•ç™»å‡ºä¸¦å›žåˆ°ç™»å…¥é ã€‚
+- **登入流程**：登出/未登入時進入 Landing Page，使用 Google / GitHub OAuth。登入後若尚未設定 `@userID`，會被導向 `setup-username`。
+- **使用者代號驗證**：`@userID` 僅允許 3–15 個小寫字母或底線，輸入時即時檢查格式與是否被占用，並提供推薦選項。
+- **首頁（Home）**：具 All / Following 篩選、貼文時間排序、留言/按讚/轉發/刪除、自動展開留言、支援遞迴路由進入單篇貼文或留言串。
+- **發文（Post）**：Modal 與 inline composer，遵守 280 字上限；網址計算 23 字元；Hashtag/Mention 不計字數；可儲存 Draft。
+- **個人頁（Profile）**：區分自己與他人視圖，包含 Follow / Following、貼文/喜歡清單、編輯個人資料 Modal。
+- **自動登出**：使用者 30 分鐘內無操作（可於 `LayoutWrapper.tsx` 調整 `IDLE_TIMEOUT`）後，下次互動會自動登出並回到登入頁。
 
-## å¸¸ç”¨æŒ‡ä»¤ (æ–¼ web/ ç›®éŒ„)
+## 常用指令（於 `web/` 目錄）
 
-- 
-pm run devï¼šé–‹ç™¼æ¨¡å¼
-- 
-pm run buildï¼šå»ºç½®æ­£å¼ç‰ˆ
-- 
-pm run startï¼šå•Ÿå‹•æ­£å¼ä¼ºæœå™¨
-- 
-pm run lintï¼šåŸ·è¡Œ ESLint
-- 
-px prisma migrate devï¼šå¥—ç”¨è³‡æ–™åº«é·ç§»
-- 
-px prisma studioï¼šå•Ÿå‹• Prisma Studio ç®¡ç†è³‡æ–™ï¼ˆå¯é¸ï¼‰
+- `npm run dev`：開發模式
+- `npm run build`：建置正式版
+- `npm run start`：啟動正式伺服器
+- `npm run lint`：執行 ESLint
+- `npx prisma migrate dev`：套用資料庫遷移
+- `npx prisma studio`：啟動 Prisma Studio 管理資料（可選）
 
-## ç–‘é›£æŽ’è§£
+## 疑難排解
 
-- **OAuth callback éŒ¯èª¤**ï¼šç¢ºèª Provider è¨­å®šçš„ Redirect URI èˆ‡ .env å®Œå…¨ä¸€è‡´ã€‚
-- **Prisma P1000 èªè­‰å¤±æ•—**ï¼šç¢ºèª DATABASE_URL å¸³å¯†èˆ‡è³‡æ–™åº«æœå‹™å•Ÿå‹•ç‹€æ…‹ã€‚
-- **ç™»å…¥ç‹€æ…‹æ··äº‚**ï¼šå¯ä»¥åœ¨ç¶²é ä¸­é»žé¸ Sign outï¼Œæˆ–æ¸…é™¤ç€è¦½å™¨ Cookieï¼›NextAuth é è¨­ Session æœ‰æ•ˆæœŸ 30 å¤©ã€‚
+- **OAuth callback 錯誤**：確認 Provider 設定的 Redirect URI 與 `.env` 完全一致。
+- **Prisma P1000 認證失敗**：確認 `DATABASE_URL` 帳密與資料庫服務啟動狀態。
+- **登入狀態混亂**：可以在網頁中點選 Sign out，或清除瀏覽器 Cookie；NextAuth 預設 Session 有效期 30 天。
 
-## å¾…å®Œæˆé …ç›®
+## 待完成項目
 
-- æ’°å¯«ç«¯å°ç«¯/å…ƒä»¶æ¸¬è©¦ (Playwright / Testing Library)
-- ä¸²æŽ¥ Pusher é€²è¡Œå³æ™‚æ›´æ–°
-- ä¾ç…§ä½œæ¥­é™„ä»¶èª¿æ•´ UI ç´°ç¯€ã€RWD èˆ‡ç„¡éšœç¤™
-- åŠ å…¥ç¨®å­è³‡æ–™èˆ‡æ¸¬è©¦å·¥å…·è…³æœ¬
+- 撰寫端對端/元件測試（Playwright / Testing Library）
+- 串接 Pusher 進行即時更新
+- 依照作業附件調整 UI 細節、RWD 與無障礙
+- 加入種子資料與測試工具腳本
 
 ---
 
-è‹¥è¦åœ¨å…¶ä»–æ©Ÿå™¨æˆ–éƒ¨ç½²ç’°å¢ƒåŸ·è¡Œï¼Œè«‹è¤‡è£½ .env ä¸¦ç¢ºèªè³‡æ–™åº«å¯å°å¤–é€£ç·šï¼›åˆ‡å‹¿å°‡æ•æ„Ÿç’°å¢ƒè®Šæ•¸æäº¤è‡³ç‰ˆæœ¬æŽ§åˆ¶ã€‚ç¥é–‹ç™¼é †åˆ©ï¼
+若要在其他機器或部署環境執行，請複製 `.env` 並確認資料庫可對外連線；切勿將敏感環境變數提交至版本控制。祝開發順利！
+

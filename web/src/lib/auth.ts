@@ -1,7 +1,6 @@
 import { NextAuthOptions } from "next-auth";
 import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
-import Facebook from "next-auth/providers/facebook";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 
@@ -21,15 +20,6 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
     GitHub({
       clientId: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    })
-  );
-}
-
-if (process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET) {
-  providers.push(
-    Facebook({
-      clientId: process.env.FACEBOOK_CLIENT_ID,
-      clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
     })
   );
 }
