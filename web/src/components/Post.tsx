@@ -35,10 +35,10 @@ interface PostProps {
     };
     repostedAt?: string;
   };
-  onLike?: (postId?: string) => void;
-  onRepost?: (postId?: string) => void;
+  onLike?: (postId: string) => void;
+  onRepost?: (postId: string) => void;
   onComment?: (postId: string) => void;
-  onDelete?: (postId?: string) => void;
+  onDelete?: (postId: string) => void;
   currentUserId?: string;
   showFullContent?: boolean; // If true, don't make post clickable (for detail page)
 }

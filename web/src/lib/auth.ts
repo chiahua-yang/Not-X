@@ -38,13 +38,13 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async session({ session, user }) {
       // Attach userId to session for easy access
-      if (user) {
+      if (user && session.user) {
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
           select: { userId: true, id: true },
         });
-        session.user.id = user.id;
-        session.user.userId = dbUser?.userId || null;
+        (session.user as any).id = user.id;
+        (session.user as any).userId = dbUser?.userId || null;
       }
       return session;
     },
