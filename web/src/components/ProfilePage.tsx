@@ -23,6 +23,7 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [isHoveringFollow, setIsHoveringFollow] = useState(false);
 
   const isOwnProfile = !userId || currentUser?.userId === userId;
 
@@ -79,10 +80,10 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
   }, [profileUser, isOwnProfile]);
 
   const handleFollow = async () => {
-    if (!profileUser?.id) return;
+    if (!profileUser?.userId) return;
 
     try {
-      const res = await fetch(`/api/users/${profileUser.id}/follow`, {
+      const res = await fetch(`/api/users/${profileUser.userId}/follow`, {
         method: "POST",
       });
 
@@ -108,6 +109,90 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
       .then((res) => res.json())
       .then((data) => setPosts(data.posts || []))
       .catch(console.error);
+  };
+
+  const refreshLikedPosts = () => {
+    if (!profileUser?.id) return;
+    fetch(`/api/posts/liked?userId=${profileUser.id}`)
+      .then((res) => res.json())
+      .then((data) => setLikedPosts(data.posts || []))
+      .catch(console.error);
+  };
+
+  const handleLike = async (postId: string) => {
+    try {
+      await fetch(`/api/posts/${postId}/like`, { method: "POST" });
+
+      // Update local state to toggle like status
+      if (activeTab === "posts") {
+        setPosts(prevPosts =>
+          prevPosts.map(post => {
+            if (post.id === postId) {
+              const isCurrentlyLiked = post.isLiked || (post.likes && post.likes.length > 0);
+              return {
+                ...post,
+                isLiked: !isCurrentlyLiked,
+                likes: isCurrentlyLiked ? [] : [{ id: 'temp' }],
+                _count: {
+                  ...post._count,
+                  likes: isCurrentlyLiked ? post._count.likes - 1 : post._count.likes + 1
+                }
+              };
+            }
+            return post;
+          })
+        );
+      } else {
+        // For likes tab, also update local state but don't remove from list
+        setLikedPosts(prevPosts =>
+          prevPosts.map(post => {
+            if (post.id === postId) {
+              const isCurrentlyLiked = post.isLiked || (post.likes && post.likes.length > 0);
+              return {
+                ...post,
+                isLiked: !isCurrentlyLiked,
+                likes: isCurrentlyLiked ? [] : [{ id: 'temp' }],
+                _count: {
+                  ...post._count,
+                  likes: isCurrentlyLiked ? post._count.likes - 1 : post._count.likes + 1
+                }
+              };
+            }
+            return post;
+          })
+        );
+      }
+    } catch (error) {
+      console.error("Failed to like/unlike post:", error);
+    }
+  };
+
+  const handleRepost = async (postId: string) => {
+    try {
+      await fetch(`/api/posts/${postId}/repost`, { method: "POST" });
+      if (activeTab === "posts") {
+        refreshPosts();
+      }
+    } catch (error) {
+      console.error("Failed to repost:", error);
+    }
+  };
+
+  const handleDelete = async (postId: string) => {
+    if (!confirm("Are you sure you want to delete this post?")) return;
+
+    try {
+      const res = await fetch(`/api/posts/${postId}`, { method: "DELETE" });
+      if (res.ok) {
+        if (activeTab === "posts") {
+          refreshPosts();
+        } else {
+          refreshLikedPosts();
+        }
+      }
+    } catch (error) {
+      console.error("Failed to delete post:", error);
+    }
   };
 
   if (isLoading) {
@@ -156,16 +241,17 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
 
       {/* Profile Info */}
       <div className="px-4 pb-4">
-        {/* Avatar and Edit/Follow Button */}
-        <div className="flex items-start justify-between -mt-16 mb-4">
+        {/* Avatar and Button Row */}
+        <div className="flex items-end justify-between -mt-16 mb-4">
           {/* Avatar */}
           <div
-            className="w-32 h-32 rounded-full border-4"
+            className="relative w-32 h-32 rounded-full border-4"
             style={{
               borderColor: "var(--background)",
               background: profileUser.image
                 ? `url(${profileUser.image}) center/cover`
                 : "var(--color-primary)",
+              zIndex: 10,
             }}
           >
             {!profileUser.image && (
@@ -179,7 +265,7 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
           {isOwnProfile ? (
             <button
               onClick={() => setShowEditModal(true)}
-              className="mt-3 px-6 py-2 rounded-full font-semibold border transition hover:bg-gray-800"
+              className="px-6 py-2 rounded-full font-semibold border transition hover:bg-gray-800"
               style={{ borderColor: "#666", color: "var(--foreground)" }}
             >
               Edit profile
@@ -187,14 +273,22 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
           ) : (
             <button
               onClick={handleFollow}
-              className="mt-3 px-6 py-2 rounded-full font-semibold transition"
+              onMouseEnter={() => setIsHoveringFollow(true)}
+              onMouseLeave={() => setIsHoveringFollow(false)}
+              className="px-6 py-2 rounded-full font-semibold transition-all cursor-pointer"
               style={{
-                background: isFollowing ? "transparent" : "var(--foreground)",
-                color: isFollowing ? "var(--foreground)" : "var(--background)",
-                border: isFollowing ? "1px solid #666" : "none",
+                background: isFollowing
+                  ? (isHoveringFollow ? "rgba(254, 226, 226, 0.1)" : "transparent")
+                  : "var(--foreground)",
+                color: isFollowing
+                  ? (isHoveringFollow ? "#f91880" : "var(--foreground)")
+                  : "var(--background)",
+                border: isFollowing
+                  ? (isHoveringFollow ? "1px solid #f91880" : "1px solid #666")
+                  : "none",
               }}
             >
-              {isFollowing ? "Following" : "Follow"}
+              {isFollowing ? (isHoveringFollow ? "Unfollow" : "Following") : "Follow"}
             </button>
           )}
         </div>
@@ -254,14 +348,14 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
               <div className="p-8 text-center text-gray-500">No posts yet</div>
             ) : (
               <div>
-                {posts.map((post) => (
+                {posts.map((post, index) => (
                   <Post
-                    key={post.id}
+                    key={post.repostedAt ? `repost-${post.id}-${post.repostedAt}` : post.id}
                     post={post}
                     currentUserId={currentUser?.id}
-                    onLike={() => refreshPosts()}
-                    onRepost={() => refreshPosts()}
-                    onDelete={() => refreshPosts()}
+                    onLike={handleLike}
+                    onRepost={handleRepost}
+                    onDelete={handleDelete}
                   />
                 ))}
               </div>
@@ -283,9 +377,9 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                       key={post.id}
                       post={post}
                       currentUserId={currentUser?.id}
-                      onLike={() => refreshPosts()}
-                      onRepost={() => refreshPosts()}
-                      onDelete={() => refreshPosts()}
+                      onLike={handleLike}
+                      onRepost={handleRepost}
+                      onDelete={handleDelete}
                     />
                   ))}
                 </div>

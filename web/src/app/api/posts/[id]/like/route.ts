@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
+import { triggerPusherEvent } from "@/lib/pusher";
 
 export async function POST(
   req: NextRequest,
@@ -43,13 +44,15 @@ export async function POST(
       },
     });
 
+    let liked: boolean;
+    let likeCount: number;
+
     if (existingLike) {
       // Unlike
       await prisma.postLike.delete({
         where: { id: existingLike.id },
       });
-
-      return NextResponse.json({ liked: false });
+      liked = false;
     } else {
       // Like
       await prisma.postLike.create({
@@ -58,9 +61,23 @@ export async function POST(
           postId,
         },
       });
-
-      return NextResponse.json({ liked: true });
+      liked = true;
     }
+
+    // Get updated like count
+    likeCount = await prisma.postLike.count({
+      where: { postId },
+    });
+
+    // Trigger Pusher event for real-time update
+    await triggerPusherEvent(`post-${postId}`, "like-update", {
+      postId,
+      liked,
+      likeCount,
+      userId: user.id,
+    });
+
+    return NextResponse.json({ liked, likeCount });
   } catch (error) {
     console.error("Error toggling like:", error);
     return NextResponse.json(

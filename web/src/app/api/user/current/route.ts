@@ -21,7 +21,6 @@ export async function GET() {
         image: true,
         bio: true,
         email: true,
-        postsCount: true,
         followersCount: true,
         followingCount: true,
       },
@@ -31,7 +30,26 @@ export async function GET() {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ user });
+    // Calculate total posts count (authored posts + reposts)
+    const authoredPostsCount = await prisma.post.count({
+      where: {
+        authorId: user.id,
+        parentId: null,
+      },
+    });
+
+    const repostsCount = await prisma.repost.count({
+      where: { userId: user.id },
+    });
+
+    const totalPostsCount = authoredPostsCount + repostsCount;
+
+    return NextResponse.json({
+      user: {
+        ...user,
+        postsCount: totalPostsCount,
+      }
+    });
   } catch (error) {
     console.error("Error fetching current user:", error);
     return NextResponse.json(

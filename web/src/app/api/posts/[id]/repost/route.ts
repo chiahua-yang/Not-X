@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
+import { triggerPusherEvent } from "@/lib/pusher";
 
 export async function POST(
   req: NextRequest,
@@ -43,13 +44,15 @@ export async function POST(
       },
     });
 
+    let reposted: boolean;
+    let repostCount: number;
+
     if (existingRepost) {
       // Unrepost
       await prisma.repost.delete({
         where: { id: existingRepost.id },
       });
-
-      return NextResponse.json({ reposted: false });
+      reposted = false;
     } else {
       // Repost
       await prisma.repost.create({
@@ -58,9 +61,23 @@ export async function POST(
           postId,
         },
       });
-
-      return NextResponse.json({ reposted: true });
+      reposted = true;
     }
+
+    // Get updated repost count
+    repostCount = await prisma.repost.count({
+      where: { postId },
+    });
+
+    // Trigger Pusher event for real-time update
+    await triggerPusherEvent(`post-${postId}`, "repost-update", {
+      postId,
+      reposted,
+      repostCount,
+      userId: user.id,
+    });
+
+    return NextResponse.json({ reposted, repostCount });
   } catch (error) {
     console.error("Error toggling repost:", error);
     return NextResponse.json(

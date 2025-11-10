@@ -3,6 +3,139 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    const { id: postId } = await params;
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      include: {
+        author: {
+          select: {
+            id: true,
+            userId: true,
+            name: true,
+            displayName: true,
+            image: true,
+          },
+        },
+        _count: {
+          select: {
+            likes: true,
+            reposts: true,
+            comments: true,
+          },
+        },
+        comments: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                userId: true,
+                name: true,
+                displayName: true,
+                image: true,
+              },
+            },
+            _count: {
+              select: {
+                likes: true,
+                reposts: true,
+                comments: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+    });
+
+    if (!post) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
+
+    // Check if current user liked/reposted this post and its comments
+    let enrichedPost = post;
+    if (session?.user?.email) {
+      const user = await prisma.user.findUnique({
+        where: { email: session.user.email },
+      });
+
+      if (user) {
+        const [postLike, postRepost] = await Promise.all([
+          prisma.postLike.findUnique({
+            where: {
+              userId_postId: {
+                userId: user.id,
+                postId: post.id,
+              },
+            },
+          }),
+          prisma.repost.findUnique({
+            where: {
+              userId_postId: {
+                userId: user.id,
+                postId: post.id,
+              },
+            },
+          }),
+        ]);
+
+        // Enrich comments with like/repost status
+        const enrichedComments = await Promise.all(
+          post.comments.map(async (comment) => {
+            const [commentLike, commentRepost] = await Promise.all([
+              prisma.postLike.findUnique({
+                where: {
+                  userId_postId: {
+                    userId: user.id,
+                    postId: comment.id,
+                  },
+                },
+              }),
+              prisma.repost.findUnique({
+                where: {
+                  userId_postId: {
+                    userId: user.id,
+                    postId: comment.id,
+                  },
+                },
+              }),
+            ]);
+
+            return {
+              ...comment,
+              isLiked: !!commentLike,
+              isReposted: !!commentRepost,
+            };
+          })
+        );
+
+        enrichedPost = {
+          ...post,
+          isLiked: !!postLike,
+          isReposted: !!postRepost,
+          comments: enrichedComments,
+        } as any;
+      }
+    }
+
+    return NextResponse.json(enrichedPost);
+  } catch (error) {
+    console.error("Error fetching post:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch post" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

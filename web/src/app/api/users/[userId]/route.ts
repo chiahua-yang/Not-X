@@ -31,7 +31,6 @@ export async function GET(
         image: true,
         coverImage: true,
         bio: true,
-        postsCount: true,
         followersCount: true,
         followingCount: true,
       },
@@ -40,6 +39,20 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+
+    // Calculate total posts count (authored posts + reposts)
+    const authoredPostsCount = await prisma.post.count({
+      where: {
+        authorId: user.id,
+        parentId: null,
+      },
+    });
+
+    const repostsCount = await prisma.repost.count({
+      where: { userId: user.id },
+    });
+
+    const totalPostsCount = authoredPostsCount + repostsCount;
 
     // Check if current user is following this user
     let isFollowing = false;
@@ -55,7 +68,13 @@ export async function GET(
       isFollowing = !!follow;
     }
 
-    return NextResponse.json({ user, isFollowing });
+    return NextResponse.json({
+      user: {
+        ...user,
+        postsCount: totalPostsCount,
+      },
+      isFollowing
+    });
   } catch (error) {
     console.error("Error fetching user:", error);
     return NextResponse.json(

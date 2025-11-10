@@ -62,8 +62,19 @@ export default function LandingPage() {
     if (!userIdInput.trim()) return;
 
     setIsLoggingIn(true);
-    // Show provider selection modal
-    setShowProviderModal(true);
+
+    // Try to find the account by userId and use its provider
+    const matchedAccount = savedAccounts.find(
+      acc => acc.userId.toLowerCase() === userIdInput.trim().toLowerCase().replace('@', '')
+    );
+
+    if (matchedAccount?.provider && (matchedAccount.provider === 'google' || matchedAccount.provider === 'github')) {
+      // Found a match, use its provider directly
+      await signIn(matchedAccount.provider, { callbackUrl: '/home' });
+    } else {
+      // No match found, show provider selection modal
+      setShowProviderModal(true);
+    }
   };
 
   const handleProviderLogin = async (provider: 'google' | 'github') => {

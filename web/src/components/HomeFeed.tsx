@@ -6,6 +6,45 @@ import Post from "./Post";
 
 type FilterType = "all" | "following";
 
+const MAX_CHARS = 280;
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+
+// Helper function to parse content and count characters
+function parseContent(content: string) {
+  let charCount = 0;
+  let lastIndex = 0;
+
+  // Find all URLs
+  const matches = content.matchAll(URL_REGEX);
+  for (const match of matches) {
+    const url = match[0];
+    const urlStart = match.index!;
+
+    // Count characters before this URL
+    const textBefore = content.substring(lastIndex, urlStart);
+    charCount += textBefore.length;
+
+    // URLs always count as 23 characters
+    charCount += 23;
+
+    lastIndex = urlStart + url.length;
+  }
+
+  // Count remaining characters after last URL
+  charCount += content.substring(lastIndex).length;
+
+  // Remove hashtags and mentions from count
+  const hashtagMentionRegex = /[#@]\w+/g;
+  const textWithoutUrls = content.replace(URL_REGEX, '');
+  const hashtagsMentions = textWithoutUrls.match(hashtagMentionRegex) || [];
+
+  for (const tag of hashtagsMentions) {
+    charCount -= tag.length;
+  }
+
+  return charCount;
+}
+
 export default function HomeFeed() {
   const { data: session } = useSession();
   const [filter, setFilter] = useState<FilterType>("all");
@@ -190,33 +229,63 @@ export default function HomeFeed() {
                 <textarea
                   ref={textareaRef}
                   value={inlineContent}
-                  onChange={(e) => setInlineContent(e.target.value)}
+                  onChange={(e) => {
+                    const newValue = e.target.value;
+                    const charCount = parseContent(newValue);
+                    // Prevent input if over limit
+                    if (charCount <= MAX_CHARS) {
+                      setInlineContent(newValue);
+                    }
+                  }}
                   placeholder="What's happening?"
                   className="w-full bg-transparent resize-none outline-none text-lg"
                   style={{ color: "var(--foreground)", minHeight: "80px" }}
                   rows={1}
                 />
-                <div className="flex items-center justify-end gap-3 mt-3">
-                  <button
-                    onClick={() => {
-                      setShowInlineComposer(false);
-                      setInlineContent("");
-                    }}
-                    className="text-sm text-gray-500 hover:text-gray-300"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleInlinePost}
-                    disabled={!inlineContent.trim() || isPosting}
-                    className="px-5 py-2 rounded-full font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{
-                      background: inlineContent.trim() ? "var(--color-primary)" : "#333",
-                      color: inlineContent.trim() ? "#fff" : "#666",
-                    }}
-                  >
-                    {isPosting ? "Posting..." : "Post"}
-                  </button>
+                <div className="flex items-center justify-between mt-3">
+                  <div className="text-sm">
+                    {(() => {
+                      const charCount = parseContent(inlineContent);
+                      const remaining = MAX_CHARS - charCount;
+
+                      if (remaining <= 20 && remaining >= 0) {
+                        return (
+                          <span className={remaining <= 10 ? "text-orange-500" : "text-gray-400"}>
+                            {remaining}
+                          </span>
+                        );
+                      } else if (remaining < 0) {
+                        return (
+                          <span className="text-red-500">
+                            {Math.abs(remaining)} over limit
+                          </span>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        setShowInlineComposer(false);
+                        setInlineContent("");
+                      }}
+                      className="text-sm text-gray-500 hover:text-gray-300"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleInlinePost}
+                      disabled={!inlineContent.trim() || isPosting || parseContent(inlineContent) > MAX_CHARS}
+                      className="px-5 py-2 rounded-full font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{
+                        background: (inlineContent.trim() && parseContent(inlineContent) <= MAX_CHARS) ? "var(--color-primary)" : "#333",
+                        color: (inlineContent.trim() && parseContent(inlineContent) <= MAX_CHARS) ? "#fff" : "#666",
+                      }}
+                    >
+                      {isPosting ? "Posting..." : "Post"}
+                    </button>
+                  </div>
                 </div>
               </>
             )}
@@ -235,7 +304,7 @@ export default function HomeFeed() {
         <div>
           {posts.map((post) => (
             <Post
-              key={post.id}
+              key={post.repostedAt ? `repost-${post.id}-${post.repostedAt}` : post.id}
               post={post}
               currentUserId={currentUser?.id}
               onLike={handleLike}

@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { formatTimeAgo } from "@/lib/timeFormat";
+import { getPusherClient } from "@/lib/pusher-client";
 
 interface PostProps {
   post: {
@@ -20,21 +22,89 @@ interface PostProps {
       reposts: number;
       comments: number;
     };
+    isLiked?: boolean;
+    isReposted?: boolean;
     likes?: Array<{ id: string }>;
     reposts?: Array<{ id: string }>;
+    repostedBy?: {
+      id: string;
+      userId: string | null;
+      name: string | null;
+      displayName: string | null;
+      image: string | null;
+    };
+    repostedAt?: string;
   };
-  onLike?: (postId: string) => void;
-  onRepost?: (postId: string) => void;
+  onLike?: (postId?: string) => void;
+  onRepost?: (postId?: string) => void;
   onComment?: (postId: string) => void;
-  onDelete?: (postId: string) => void;
+  onDelete?: (postId?: string) => void;
   currentUserId?: string;
+  showFullContent?: boolean; // If true, don't make post clickable (for detail page)
 }
 
-export default function Post({ post, onLike, onRepost, onComment, onDelete, currentUserId }: PostProps) {
+export default function Post({ post, onLike, onRepost, onComment, onDelete, currentUserId, showFullContent = false }: PostProps) {
+  const router = useRouter();
   const [showMenu, setShowMenu] = useState(false);
-  const isLiked = post.likes && post.likes.length > 0;
-  const isReposted = post.reposts && post.reposts.length > 0;
+  const [likeCount, setLikeCount] = useState(post._count.likes);
+  const [commentCount, setCommentCount] = useState(post._count.comments);
+  const [repostCount, setRepostCount] = useState(post._count.reposts);
+  const isLiked = post.isLiked !== undefined ? post.isLiked : (post.likes && post.likes.length > 0);
+  const isReposted = post.isReposted !== undefined ? post.isReposted : (post.reposts && post.reposts.length > 0);
   const isOwnPost = currentUserId === post.author.id;
+
+  // Subscribe to Pusher events for real-time updates
+  useEffect(() => {
+    const pusher = getPusherClient();
+    const channelName = `post-${post.id}`;
+    console.log(`[Post ${post.id}] Subscribing to channel:`, channelName);
+
+    const channel = pusher.subscribe(channelName);
+
+    channel.bind("pusher:subscription_succeeded", () => {
+      console.log(`[Post ${post.id}] Successfully subscribed to channel`);
+    });
+
+    channel.bind("pusher:subscription_error", (error: any) => {
+      console.error(`[Post ${post.id}] Subscription error:`, error);
+    });
+
+    // Listen for like updates
+    channel.bind("like-update", (data: { likeCount: number; userId: string }) => {
+      console.log(`[Post ${post.id}] Received like-update:`, data);
+      setLikeCount(data.likeCount);
+    });
+
+    // Listen for comment updates
+    channel.bind("comment-update", (data: { commentCount: number }) => {
+      console.log(`[Post ${post.id}] Received comment-update:`, data);
+      setCommentCount(data.commentCount);
+    });
+
+    // Listen for repost updates
+    channel.bind("repost-update", (data: { repostCount: number }) => {
+      console.log(`[Post ${post.id}] Received repost-update:`, data);
+      setRepostCount(data.repostCount);
+    });
+
+    return () => {
+      console.log(`[Post ${post.id}] Unsubscribing from channel`);
+      channel.unbind_all();
+      channel.unsubscribe();
+    };
+  }, [post.id]);
+
+  const handlePostClick = (e: React.MouseEvent) => {
+    // Don't navigate if clicking on a button or link
+    if ((e.target as HTMLElement).closest('button, a')) {
+      return;
+    }
+    // Don't navigate if already on detail page
+    if (showFullContent) {
+      return;
+    }
+    router.push(`/post/${post.id}`);
+  };
 
   // Parse content to create links for URLs, hashtags, and mentions
   const parseContent = (content: string) => {
@@ -89,13 +159,29 @@ export default function Post({ post, onLike, onRepost, onComment, onDelete, curr
         );
       } else if (el.type === 'hashtag') {
         result.push(
-          <span key={i} className="text-blue-400 hover:underline cursor-pointer">
+          <span
+            key={i}
+            className="text-blue-400 hover:underline cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              // TODO: Navigate to hashtag search page
+              console.log('Hashtag clicked:', el.value);
+            }}
+          >
             {el.value}
           </span>
         );
       } else if (el.type === 'mention') {
+        const username = el.value.substring(1); // Remove @ symbol
         result.push(
-          <span key={i} className="text-blue-400 hover:underline cursor-pointer">
+          <span
+            key={i}
+            className="text-blue-400 hover:underline cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/user/${username}`);
+            }}
+          >
             {el.value}
           </span>
         );
@@ -114,17 +200,42 @@ export default function Post({ post, onLike, onRepost, onComment, onDelete, curr
 
   return (
     <article
-      className="border-b p-4"
+      onClick={handlePostClick}
+      className={`border-b p-4 ${!showFullContent ? 'cursor-pointer transition-colors hover:bg-gray-900 hover:bg-opacity-30' : ''}`}
       style={{ borderColor: "#333" }}
     >
+      {/* Repost Header */}
+      {post.repostedBy && (
+        <div className="flex items-center gap-2 mb-2 text-sm text-gray-500">
+          <span className="ml-8">🔁</span>
+          <span
+            className="hover:underline cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (post.repostedBy?.userId) {
+                router.push(`/user/${post.repostedBy.userId}`);
+              }
+            }}
+          >
+            {post.repostedBy.displayName || post.repostedBy.name || post.repostedBy.userId} reposted
+          </span>
+        </div>
+      )}
+
       <div className="flex gap-3">
         {/* Avatar */}
         <div
-          className="w-12 h-12 rounded-full flex-shrink-0"
+          className="w-12 h-12 rounded-full flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
           style={{
             background: post.author.image
               ? `url(${post.author.image}) center/cover`
               : "var(--color-primary)",
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (post.author.userId) {
+              router.push(`/user/${post.author.userId}`);
+            }
           }}
         >
           {!post.author.image && (
@@ -139,10 +250,26 @@ export default function Post({ post, onLike, onRepost, onComment, onDelete, curr
           {/* Header */}
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
-              <span className="font-semibold hover:underline cursor-pointer">
+              <span
+                className="font-semibold hover:underline cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (post.author.userId) {
+                    router.push(`/user/${post.author.userId}`);
+                  }
+                }}
+              >
                 {post.author.displayName || post.author.name}
               </span>
-              <span className="text-gray-500">
+              <span
+                className="text-gray-500 hover:underline cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (post.author.userId) {
+                    router.push(`/user/${post.author.userId}`);
+                  }
+                }}
+              >
                 @{post.author.userId || "unknown"}
               </span>
               <span className="text-gray-500">·</span>
@@ -193,18 +320,28 @@ export default function Post({ post, onLike, onRepost, onComment, onDelete, curr
           <div className="flex items-center gap-6 text-gray-500">
             {/* Comment */}
             <button
-              onClick={() => onComment?.(post.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onComment) {
+                  onComment(post.id);
+                } else if (!showFullContent) {
+                  router.push(`/post/${post.id}`);
+                }
+              }}
               className="flex items-center gap-2 hover:text-blue-400 transition group"
             >
               <span className="group-hover:bg-blue-400 group-hover:bg-opacity-10 rounded-full p-2 transition">
                 💬
               </span>
-              <span className="text-sm">{post._count.comments}</span>
+              <span className="text-sm">{commentCount}</span>
             </button>
 
             {/* Repost */}
             <button
-              onClick={() => onRepost?.(post.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRepost?.(post.id);
+              }}
               className={`flex items-center gap-2 transition group ${
                 isReposted ? "text-green-500" : "hover:text-green-500"
               }`}
@@ -212,12 +349,15 @@ export default function Post({ post, onLike, onRepost, onComment, onDelete, curr
               <span className="group-hover:bg-green-500 group-hover:bg-opacity-10 rounded-full p-2 transition">
                 🔁
               </span>
-              <span className="text-sm">{post._count.reposts}</span>
+              <span className="text-sm">{repostCount}</span>
             </button>
 
             {/* Like */}
             <button
-              onClick={() => onLike?.(post.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onLike?.(post.id);
+              }}
               className={`flex items-center gap-2 transition group ${
                 isLiked ? "text-red-500" : "hover:text-red-500"
               }`}
@@ -225,7 +365,7 @@ export default function Post({ post, onLike, onRepost, onComment, onDelete, curr
               <span className="group-hover:bg-red-500 group-hover:bg-opacity-10 rounded-full p-2 transition">
                 {isLiked ? "❤️" : "🤍"}
               </span>
-              <span className="text-sm">{post._count.likes}</span>
+              <span className="text-sm">{likeCount}</span>
             </button>
           </div>
         </div>

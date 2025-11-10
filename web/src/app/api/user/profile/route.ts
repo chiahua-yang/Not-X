@@ -38,13 +38,31 @@ export async function PATCH(req: NextRequest) {
         image: true,
         coverImage: true,
         bio: true,
-        postsCount: true,
         followersCount: true,
         followingCount: true,
       },
     });
 
-    return NextResponse.json({ user: updatedUser });
+    // Calculate total posts count (authored posts + reposts)
+    const authoredPostsCount = await prisma.post.count({
+      where: {
+        authorId: updatedUser.id,
+        parentId: null,
+      },
+    });
+
+    const repostsCount = await prisma.repost.count({
+      where: { userId: updatedUser.id },
+    });
+
+    const totalPostsCount = authoredPostsCount + repostsCount;
+
+    return NextResponse.json({
+      user: {
+        ...updatedUser,
+        postsCount: totalPostsCount,
+      }
+    });
   } catch (error) {
     console.error("Error updating profile:", error);
     return NextResponse.json(

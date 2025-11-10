@@ -14,38 +14,23 @@ const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
 // Helper function to parse content and count characters
 function parseContent(content: string) {
-  let charCount = 0;
-  let lastIndex = 0;
+  // Step 1: Replace all URLs with a placeholder of exactly 23 characters
+  const urlPlaceholder = 'X'.repeat(23);
+  let modifiedContent = content;
   const urls: string[] = [];
 
-  // Find all URLs
-  const matches = content.matchAll(URL_REGEX);
-  for (const match of matches) {
-    const url = match[0];
-    const urlStart = match.index!;
-
-    // Count characters before this URL
-    const textBefore = content.substring(lastIndex, urlStart);
-    charCount += textBefore.length;
-
-    // URLs always count as 23 characters
-    charCount += 23;
-    urls.push(url);
-
-    lastIndex = urlStart + url.length;
+  const urlMatches = content.matchAll(URL_REGEX);
+  for (const match of urlMatches) {
+    urls.push(match[0]);
+    modifiedContent = modifiedContent.replace(match[0], urlPlaceholder);
   }
 
-  // Count remaining characters after last URL
-  charCount += content.substring(lastIndex).length;
+  // Step 2: Remove all hashtags and mentions (they don't count toward limit)
+  const hashtagMentionRegex = /(#\w+|@\w+)/g;
+  const contentWithoutHashtagsMentions = modifiedContent.replace(hashtagMentionRegex, '');
 
-  // Remove hashtags and mentions from count
-  const hashtagMentionRegex = /[#@]\w+/g;
-  const textWithoutUrls = content.replace(URL_REGEX, '');
-  const hashtagsMentions = textWithoutUrls.match(hashtagMentionRegex) || [];
-
-  for (const tag of hashtagsMentions) {
-    charCount -= tag.length;
-  }
+  // Step 3: Count remaining characters
+  const charCount = contentWithoutHashtagsMentions.length;
 
   return { charCount, urls };
 }
