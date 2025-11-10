@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import PostModal from "./PostModal";
 
 function NavItem({ href, label, highlight = false, onClick }: { href?: string; label: string; highlight?: boolean; onClick?: () => void }) {
@@ -41,8 +41,10 @@ function NavItem({ href, label, highlight = false, onClick }: { href?: string; l
 export default function Sidebar() {
   const { data: session } = useSession();
   const pathname = usePathname();
+  const router = useRouter();
   const [showPostModal, setShowPostModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   // Fetch current user info (skip if on setup-username page)
@@ -55,7 +57,18 @@ export default function Sidebar() {
     }
   }, [session, pathname]);
 
-  const handleLogout = () => {
+  const handleAddAccount = () => {
+    setShowUserMenu(false);
+    signOut({ callbackUrl: "/" });
+  };
+
+  const handleLogoutClick = () => {
+    setShowUserMenu(false);
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = () => {
+    setShowLogoutConfirm(false);
     signOut({ callbackUrl: "/" });
   };
 
@@ -118,21 +131,14 @@ export default function Sidebar() {
                   style={{ background: "var(--background)", border: "1px solid #333" }}
                 >
                   <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      // TODO: Add account switching functionality
-                      alert("Account switching not implemented yet");
-                    }}
+                    onClick={handleAddAccount}
                     className="w-full px-4 py-3 text-left hover:bg-gray-800 transition"
                     style={{ color: "var(--foreground)" }}
                   >
                     Add an existing account
                   </button>
                   <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      handleLogout();
-                    }}
+                    onClick={handleLogoutClick}
                     className="w-full px-4 py-3 text-left hover:bg-gray-800 transition"
                     style={{ color: "var(--foreground)" }}
                   >
@@ -153,6 +159,38 @@ export default function Sidebar() {
           console.log("Post created successfully");
         }}
       />
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
+          <div
+            className="w-full max-w-sm rounded-2xl p-8"
+            style={{ background: "var(--background)", border: "1px solid #333" }}
+          >
+            <h2 className="mb-4 text-2xl font-bold" style={{ color: "var(--foreground)" }}>
+              Log out of Z?
+            </h2>
+            <p className="mb-6 text-gray-400">
+              You can always log back in at any time.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={confirmLogout}
+                className="w-full rounded-full bg-white px-6 py-3 font-semibold text-black transition-colors hover:bg-gray-200"
+              >
+                Log out
+              </button>
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="w-full rounded-full border px-6 py-3 font-semibold transition-colors hover:bg-gray-800"
+                style={{ borderColor: "#333", color: "var(--foreground)" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

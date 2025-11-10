@@ -102,7 +102,7 @@ export default function LandingPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-black px-4">
       <div className="w-full max-w-md">
-        <h1 className="mb-8 text-4xl font-bold text-white">Log in to X</h1>
+        <h1 className="mb-8 text-4xl font-bold text-white">Log in to Z</h1>
 
         {savedAccounts.length > 0 && (
           <div className="mb-8">
