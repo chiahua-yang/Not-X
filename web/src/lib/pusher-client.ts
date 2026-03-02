@@ -31,7 +31,8 @@ export function getPusherClient() {
     });
 
     pusherClient.connection.bind("error", (err: any) => {
-      console.error("[Pusher Client] Connection error:", err);
+      // Use warn so successful POSTs don't look broken; connection can fail due to key/cluster or auth.
+      console.warn("[Pusher Client] Connection error (realtime may be limited):", err?.message ?? err);
     });
   }
   return pusherClient;

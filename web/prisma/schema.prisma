@@ -17,6 +17,11 @@ model User {
   bio          String?  @db.Text
   email        String?  @unique
   emailVerified DateTime?
+  passwordHash String?  @db.Text
+  birthday     DateTime?
+
+  // last provider used to sign in (so we show correct one in "Continue with account")
+  lastSignInProvider String?
 
   // counts (optional denormalized fields)
   postsCount     Int      @default(0)

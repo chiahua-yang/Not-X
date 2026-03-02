@@ -1,97 +1,262 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { signIn, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import Image from 'next/image';
+import { useEffect, useState } from 'react';
+import { signIn, useSession } from 'next-auth/react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 type SavedAccount = {
-  id: string;
   userId: string;
-  name: string | null;
   displayName: string | null;
   image: string | null;
-  provider: string | null;
+  provider: 'google' | 'github' | null;
 };
+
+type SignupStep = 'form' | 'code' | 'password';
 
 export default function LandingPage() {
   const { status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const oauthError = searchParams.get('error');
+
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
-  const [showUserIdInput, setShowUserIdInput] = useState(false);
-  const [userIdInput, setUserIdInput] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [showProviderModal, setShowProviderModal] = useState(false);
+
+  const [showCreateAccountModal, setShowCreateAccountModal] = useState(false);
+  const [signupStep, setSignupStep] = useState<SignupStep>('form');
+  const [signupName, setSignupName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupMonth, setSignupMonth] = useState('');
+  const [signupDay, setSignupDay] = useState('');
+  const [signupYear, setSignupYear] = useState('');
+  const [signupCode, setSignupCode] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
+  const [signupError, setSignupError] = useState<string | null>(null);
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+
+  const [showSignInModal, setShowSignInModal] = useState(false);
+  const [signInEmail, setSignInEmail] = useState('');
+  const [signInPassword, setSignInPassword] = useState('');
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
   useEffect(() => {
-    if (status === "authenticated") {
-      router.replace("/home");
+    if (status === 'authenticated') {
+      router.replace('/home');
     }
   }, [status, router]);
 
-  // Fetch saved accounts on mount
   useEffect(() => {
-    async function fetchSavedAccounts() {
-      try {
-        const res = await fetch("/api/auth/accounts");
-        if (res.ok) {
-          const accounts = await res.json();
-          setSavedAccounts(accounts);
-        }
-      } catch (error) {
-        console.error("Failed to fetch saved accounts:", error);
+    if (status !== 'unauthenticated') return;
+
+    try {
+      if (typeof window === 'undefined') return;
+      const raw = window.localStorage.getItem('z_saved_accounts');
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) return;
+      // Only keep the latest one (migrate old list of multiple accounts).
+      const list = parsed.length > 1 ? [parsed[0]] : parsed;
+      if (parsed.length > 1) {
+        window.localStorage.setItem('z_saved_accounts', JSON.stringify(list));
       }
-    }
-    if (status === "unauthenticated") {
-      fetchSavedAccounts();
+      setSavedAccounts(list);
+    } catch {
+      // ignore localStorage parsing errors
     }
   }, [status]);
-
-  const handleAccountLogin = async (account: SavedAccount) => {
-    setIsLoggingIn(true);
-    // If we know the provider, use it directly; otherwise show modal
-    if (account.provider && (account.provider === 'google' || account.provider === 'github')) {
-      await signIn(account.provider, { callbackUrl: '/home' });
-    } else {
-      // Fallback to modal if provider is unknown
-      setShowProviderModal(true);
-    }
-  };
-
-  const handleUserIdLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!userIdInput.trim()) return;
-
-    setIsLoggingIn(true);
-
-    // Try to find the account by userId and use its provider
-    const matchedAccount = savedAccounts.find(
-      acc => acc.userId.toLowerCase() === userIdInput.trim().toLowerCase().replace('@', '')
-    );
-
-    if (matchedAccount?.provider && (matchedAccount.provider === 'google' || matchedAccount.provider === 'github')) {
-      // Found a match, use its provider directly
-      await signIn(matchedAccount.provider, { callbackUrl: '/home' });
-    } else {
-      // No match found, show provider selection modal
-      setShowProviderModal(true);
-    }
-  };
 
   const handleProviderLogin = async (provider: 'google' | 'github') => {
     await signIn(provider, { callbackUrl: '/home' });
   };
 
-  const removeAccount = async (accountId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    // TODO: Implement account removal from local saved list
-    setSavedAccounts(prev => prev.filter(acc => acc.id !== accountId));
+  const handleAccountLogin = async (account: SavedAccount) => {
+    if (!account.provider) {
+      setShowSignInModal(true);
+      return;
+    }
+
+    setIsLoggingIn(true);
+    await signIn(account.provider, { callbackUrl: '/home' });
   };
 
-  if (status === "authenticated") {
-    return null;
-  }
+  const handleCreateAccountSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignupError(null);
 
-  if (status === "loading") {
+    if (
+      !signupName.trim() ||
+      !signupEmail.trim() ||
+      !signupMonth ||
+      !signupDay ||
+      !signupYear
+    ) {
+      setSignupError('Please fill in all fields.');
+      return;
+    }
+
+    setIsSendingCode(true);
+    try {
+      const res = await fetch('/api/auth/email/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: signupName.trim(),
+          email: signupEmail.trim(),
+          birthday: `${signupYear}-${signupMonth}-${signupDay}`,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setSignupError(data.error || 'Failed to send verification code.');
+        return;
+      }
+
+      setSignupStep('code');
+      setSignupCode('');
+    } catch (err) {
+      console.error('Failed to send verification code:', err);
+      setSignupError('Failed to send verification code.');
+    } finally {
+      setIsSendingCode(false);
+    }
+  };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignupError(null);
+
+    if (!signupEmail.trim() || !signupCode.trim()) {
+      setSignupError('Please enter the code sent to your email.');
+      return;
+    }
+
+    setIsVerifyingCode(true);
+    try {
+      const res = await fetch('/api/auth/email/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: signupEmail.trim(),
+          code: signupCode.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setSignupError(data.error || 'Invalid code.');
+        return;
+      }
+
+      setSignupStep('password');
+      setSignupPassword('');
+      setSignupPasswordConfirm('');
+    } catch (err) {
+      console.error('Failed to verify code:', err);
+      setSignupError('Failed to verify code.');
+    } finally {
+      setIsVerifyingCode(false);
+    }
+  };
+
+  const handleSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignupError(null);
+
+    if (!signupPassword || signupPassword.length < 8) {
+      setSignupError('Password must be at least 8 characters.');
+      return;
+    }
+    if (signupPassword !== signupPasswordConfirm) {
+      setSignupError('Passwords do not match.');
+      return;
+    }
+
+    try {
+      const birthdayString =
+        signupYear && signupMonth && signupDay
+          ? `${signupYear}-${signupMonth}-${signupDay}`
+          : undefined;
+
+      const res = await fetch('/api/auth/email/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: signupName.trim(),
+          email: signupEmail.trim(),
+          birthday: birthdayString,
+          password: signupPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setSignupError(data.error || 'Failed to create account.');
+        return;
+      }
+
+      const result = await signIn('credentials', {
+        redirect: false,
+        email: signupEmail.trim(),
+        password: signupPassword,
+        callbackUrl: '/setup-username',
+      });
+
+      if (result?.error) {
+        setSignupError(result.error);
+        return;
+      }
+
+      setShowCreateAccountModal(false);
+      setSignupStep('form');
+      setSignupPassword('');
+      setSignupPasswordConfirm('');
+      router.replace('/setup-username');
+    } catch (err) {
+      console.error('Failed to complete registration:', err);
+      setSignupError('Failed to complete registration.');
+    }
+  };
+
+  const handleSignInSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignInError(null);
+
+    if (!signInEmail.trim() || !signInPassword.trim()) {
+      setSignInError('Email and password are required.');
+      return;
+    }
+
+    setIsSigningIn(true);
+    try {
+      const result = await signIn('credentials', {
+        redirect: false,
+        email: signInEmail.trim(),
+        password: signInPassword,
+        callbackUrl: '/home',
+      });
+
+      if (result?.error) {
+        setSignInError(result.error);
+        return;
+      }
+
+      setShowSignInModal(false);
+      router.replace('/home');
+    } catch (err) {
+      console.error('Failed to sign in:', err);
+      setSignInError('Failed to sign in.');
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
+  if (status === 'authenticated') return null;
+
+  if (status === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black">
         <p className="text-white opacity-70">Loading...</p>
@@ -101,195 +266,439 @@ export default function LandingPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-black px-4">
-      <div className="w-full max-w-md">
-        <h1 className="mb-8 text-4xl font-bold text-white">Log in to Z</h1>
-
-        {savedAccounts.length > 0 && (
-          <div className="mb-8">
-            <p className="mb-4 text-gray-400">Continue with your existing accounts</p>
-            <div className="space-y-3">
-              {savedAccounts.map((account) => (
-                <div
-                  key={account.id}
-                  className="flex w-full items-center gap-4 rounded-lg border border-gray-700 bg-black px-4 py-3 transition-colors hover:bg-gray-900"
-                >
-                  <button
-                    onClick={() => handleAccountLogin(account)}
-                    disabled={isLoggingIn}
-                    className="flex flex-1 items-center gap-4 text-left disabled:opacity-50"
-                  >
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-700 text-white">
-                      {account.image ? (
-                        <img
-                          src={account.image}
-                          alt={account.name || account.userId}
-                          className="h-full w-full rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-lg font-semibold">
-                          {(account.displayName || account.name || account.userId)
-                            .charAt(0)
-                            .toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-white">
-                        {account.displayName || account.name}
-                      </p>
-                      <p className="text-sm text-gray-400">@{account.userId}</p>
-                    </div>
-                  </button>
-                  <button
-                    onClick={(e) => removeAccount(account.id, e)}
-                    className="shrink-0 p-2 text-gray-500 transition-colors hover:text-gray-300"
-                    aria-label="Remove account"
-                  >
-                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M3 6h18v2H3zm2 3h14l-1 13H6zm5-8h4v2h-4z" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-            </div>
+      <div className="w-full max-w-5xl flex flex-col md:flex-row md:items-center md:justify-between gap-12">
+        {/* Left side: big Z logo only */}
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-7xl font-extrabold tracking-tight text-white md:text-8xl">
+            Z
           </div>
-        )}
-
-        <button
-          onClick={() => setShowProviderModal(true)}
-          disabled={isLoggingIn}
-          className="mb-6 flex w-full items-center justify-center gap-3 rounded-full border border-gray-700 bg-black px-6 py-3 text-white transition-colors hover:bg-gray-900 disabled:opacity-50"
-        >
-          <span className="text-2xl">+</span>
-          <span>Add another account</span>
-          <div className="ml-auto flex gap-2">
-            <svg className="h-5 w-5" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-            </svg>
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-            </svg>
-          </div>
-        </button>
-
-        <div className="my-6 flex items-center gap-4">
-          <div className="flex-1 border-t border-gray-700"></div>
-          <span className="text-gray-400">OR</span>
-          <div className="flex-1 border-t border-gray-700"></div>
         </div>
 
-        {!showUserIdInput ? (
-          <button
-            onClick={() => setShowUserIdInput(true)}
-            className="w-full rounded-full border border-gray-700 bg-black px-6 py-3 text-white transition-colors hover:bg-gray-900"
-          >
-            Log in with userID
-          </button>
-        ) : (
-          <form onSubmit={handleUserIdLogin} className="space-y-4">
-            <div>
-              <input
-                type="text"
-                value={userIdInput}
-                onChange={(e) => setUserIdInput(e.target.value)}
-                placeholder="Enter your @userID"
-                className="w-full rounded-lg border border-gray-700 bg-black px-4 py-3 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
-                autoFocus
-              />
-            </div>
-            <div className="flex gap-3">
+        {/* Right side: all copy + auth actions */}
+        <div className="flex-1 max-w-md w-full">
+          {oauthError === 'OAuthAccountNotLinked' && (
+            <div className="mb-4 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              <p className="font-medium">此 email 已用其他方式註冊</p>
+              <p className="mt-1 text-amber-200/90">
+                您目前使用的 Google 帳號對應的 email，已經在本站用「Email 密碼」或其他方式註冊過。請改用該 email 的密碼登入，或使用一個從未在本站註冊過的 email 用 Google 登入。
+              </p>
               <button
                 type="button"
-                onClick={() => {
-                  setShowUserIdInput(false);
-                  setUserIdInput("");
-                }}
-                className="flex-1 rounded-full border border-gray-700 bg-black px-6 py-3 text-white transition-colors hover:bg-gray-900"
+                onClick={() => router.replace('/', { scroll: false })}
+                className="mt-2 text-xs underline hover:no-underline"
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!userIdInput.trim() || isLoggingIn}
-                className="flex-1 rounded-full bg-white px-6 py-3 text-black transition-colors hover:bg-gray-200 disabled:opacity-50"
-              >
-                {isLoggingIn ? "Logging in..." : "Log in"}
+                關閉
               </button>
             </div>
-          </form>
-        )}
+          )}
+          <div className="mb-8">
+            <h1 className="mb-2 text-4xl font-bold text-white md:text-6xl">
+              Happening now
+            </h1>
+            <h2 className="text-2xl font-semibold text-white md:text-3xl">
+              Join today.
+            </h2>
+          </div>
 
-        <div className="mt-8 border-t border-gray-700 pt-8">
-          <p className="mb-4 text-center text-gray-400">Don&apos;t have an account?</p>
+          {savedAccounts.length > 0 && (
+            <div className="mb-8 rounded-2xl bg-neutral-900/80 p-4 shadow-lg ring-1 ring-neutral-800">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-400">
+                Continue with an account on this device
+              </h3>
+              <div className="space-y-2">
+                {savedAccounts.map((account) => (
+                  <button
+                    key={account.userId}
+                    type="button"
+                    onClick={() => handleAccountLogin(account)}
+                    disabled={isLoggingIn}
+                    className="flex w-full items-center justify-between rounded-xl bg-black/40 px-3 py-2.5 text-left transition hover:bg-neutral-800/80"
+                  >
+                    <div className="flex items-center gap-3">
+                      {account.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={account.image}
+                          alt={account.displayName ?? 'Account avatar'}
+                          className="h-9 w-9 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-700 text-sm font-semibold text-white">
+                          {account.displayName?.charAt(0).toUpperCase() ?? 'Z'}
+                        </div>
+                      )}
+                      <div>
+                        <div className="text-sm font-medium text-white">
+                          {account.displayName ?? 'Unknown user'}
+                        </div>
+                        <div className="text-xs text-neutral-400">
+                          {account.provider === 'google' && 'Google account'}
+                          {account.provider === 'github' && 'GitHub account'}
+                          {account.provider === null &&
+                            'Email and password account'}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-xs font-medium text-sky-400">
+                      {isLoggingIn ? 'Signing in...' : 'Sign in'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mb-6 space-y-3">
+            <button
+              type="button"
+              onClick={() => handleProviderLogin('google')}
+              className="flex w-full items-center justify-center gap-3 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-neutral-900 transition hover:bg-neutral-100"
+            >
+              <span className="text-lg">G</span>
+              <span>Sign up with Google</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleProviderLogin('github')}
+              className="flex w-full items-center justify-center gap-3 rounded-full bg-neutral-100 px-4 py-2.5 text-sm font-semibold text-neutral-900 transition hover:bg-white"
+            >
+              <span className="inline-flex h-5 w-5 items-center justify-center">
+                <Image
+                  src="/github-icon.png"
+                  alt="GitHub"
+                  width={20}
+                  height={20}
+                  className="h-5 w-5"
+                />
+              </span>
+              <span>Sign up with GitHub</span>
+            </button>
+          </div>
+
+          <div className="mb-6 flex items-center gap-3 text-neutral-500">
+            <div className="h-px flex-1 bg-neutral-800" />
+            <span className="text-xs font-semibold uppercase tracking-wide">
+              or
+            </span>
+            <div className="h-px flex-1 bg-neutral-800" />
+          </div>
+
           <button
-            onClick={() => setShowProviderModal(true)}
-            disabled={isLoggingIn}
-            className="w-full rounded-full border border-gray-700 bg-black px-6 py-3 text-white transition-colors hover:bg-gray-900 disabled:opacity-50"
+            type="button"
+            onClick={() => {
+              setShowCreateAccountModal(true);
+              setSignupStep('form');
+              setSignupError(null);
+            }}
+            className="mb-4 w-full rounded-full bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-600"
           >
-            Create a new account
+            Create account
           </button>
+
+          <p className="mb-8 text-xs text-neutral-500">
+            By signing up, you agree to the Terms of Service and Privacy
+            Policy.
+          </p>
+
+          <div className="mt-6">
+            <div className="mb-4 text-lg font-semibold text-white">
+              Already have an account?
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowSignInModal(true);
+                setSignInError(null);
+              }}
+              className="rounded-full border border-neutral-600 px-6 py-2.5 text-sm font-semibold text-sky-500 transition hover:bg-neutral-900/60"
+            >
+              Sign in
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Provider Selection Modal */}
-      {showProviderModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-          onClick={() => {
-            setShowProviderModal(false);
-            setIsLoggingIn(false);
-          }}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-black border border-gray-700 p-8"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-white">Choose a provider</h2>
+      {showCreateAccountModal && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-black p-6 shadow-2xl ring-1 ring-neutral-800">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-white">
+                Create your account
+              </h2>
               <button
+                type="button"
                 onClick={() => {
-                  setShowProviderModal(false);
-                  setIsLoggingIn(false);
+                  setShowCreateAccountModal(false);
+                  setSignupStep('form');
+                  setSignupError(null);
                 }}
-                className="text-gray-400 transition-colors hover:text-white"
+                className="text-neutral-400 hover:text-neutral-200"
               >
-                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                ✕
               </button>
             </div>
 
-            <div className="space-y-4">
+            {signupError && (
+              <div className="mb-3 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                {signupError}
+              </div>
+            )}
+
+            {signupStep === 'form' && (
+              <form onSubmit={handleCreateAccountSubmit} className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-neutral-400">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    value={signupName}
+                    onChange={(e) => setSignupName(e.target.value)}
+                    className="w-full rounded border border-neutral-700 bg-black px-3 py-2 text-sm text-white outline-none ring-sky-500/60 focus:ring-1"
+                    placeholder="Your name"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-neutral-400">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
+                    className="w-full rounded border border-neutral-700 bg-black px-3 py-2 text-sm text-white outline-none ring-sky-500/60 focus:ring-1"
+                    placeholder="you@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-neutral-400">
+                    Date of birth
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={signupMonth}
+                      onChange={(e) => setSignupMonth(e.target.value)}
+                      className="w-1/2 rounded border border-neutral-700 bg-black px-2 py-2 text-xs text-white outline-none ring-sky-500/60 focus:ring-1"
+                    >
+                      <option value="" disabled hidden>
+                        Month
+                      </option>
+                      <option value="01">January</option>
+                      <option value="02">February</option>
+                      <option value="03">March</option>
+                      <option value="04">April</option>
+                      <option value="05">May</option>
+                      <option value="06">June</option>
+                      <option value="07">July</option>
+                      <option value="08">August</option>
+                      <option value="09">September</option>
+                      <option value="10">October</option>
+                      <option value="11">November</option>
+                      <option value="12">December</option>
+                    </select>
+                    <select
+                      value={signupDay}
+                      onChange={(e) => setSignupDay(e.target.value)}
+                      className="w-1/4 rounded border border-neutral-700 bg-black px-2 py-2 text-xs text-white outline-none ring-sky-500/60 focus:ring-1"
+                    >
+                      <option value="" disabled hidden>
+                        Day
+                      </option>
+                      {Array.from({ length: 31 }).map((_, i) => (
+                        <option key={i + 1} value={String(i + 1).padStart(2, '0')}>
+                          {i + 1}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={signupYear}
+                      onChange={(e) => setSignupYear(e.target.value)}
+                      className="w-1/4 rounded border border-neutral-700 bg-black px-2 py-2 text-xs text-white outline-none ring-sky-500/60 focus:ring-1"
+                    >
+                      <option value="" disabled hidden>
+                        Year
+                      </option>
+                      {Array.from({ length: 120 }).map((_, i) => {
+                        const year = new Date().getFullYear() - i;
+                        return (
+                          <option key={year} value={String(year)}>
+                            {year}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={isSendingCode}
+                  className="mt-2 w-full rounded-full bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-600 disabled:opacity-60"
+                >
+                  {isSendingCode ? 'Sending code...' : 'Next'}
+                </button>
+              </form>
+            )}
+
+            {signupStep === 'code' && (
+              <form onSubmit={handleVerifyCode} className="space-y-4">
+                <p className="text-sm text-neutral-300">
+                  We sent a verification code to{' '}
+                  <span className="font-semibold">{signupEmail}</span>.
+                </p>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-neutral-400">
+                    Verification code
+                  </label>
+                  <input
+                    type="text"
+                    value={signupCode}
+                    onChange={(e) => setSignupCode(e.target.value)}
+                    className="w-full rounded border border-neutral-700 bg-black px-3 py-2 text-sm text-white outline-none ring-sky-500/60 focus:ring-1"
+                    placeholder="Enter the 6-digit code"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isVerifyingCode}
+                  className="mt-2 w-full rounded-full bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-600 disabled:opacity-60"
+                >
+                  {isVerifyingCode ? 'Verifying...' : 'Next'}
+                </button>
+              </form>
+            )}
+
+            {signupStep === 'password' && (
+              <form onSubmit={handleSetPassword} className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-neutral-400">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    className="w-full rounded border border-neutral-700 bg-black px-3 py-2 text-sm text-white outline-none ring-sky-500/60 focus:ring-1"
+                    placeholder="At least 8 characters"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-neutral-400">
+                    Confirm password
+                  </label>
+                  <input
+                    type="password"
+                    value={signupPasswordConfirm}
+                    onChange={(e) => setSignupPasswordConfirm(e.target.value)}
+                    className="w-full rounded border border-neutral-700 bg-black px-3 py-2 text-sm text-white outline-none ring-sky-500/60 focus:ring-1"
+                    placeholder="Re-enter your password"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="mt-2 w-full rounded-full bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-600"
+                >
+                  Sign up
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showSignInModal && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-black p-6 shadow-2xl ring-1 ring-neutral-800">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-white">Sign in</h2>
               <button
+                type="button"
+                onClick={() => {
+                  setShowSignInModal(false);
+                  setSignInError(null);
+                }}
+                className="text-neutral-400 hover:text-neutral-200"
+              >
+                ✕
+              </button>
+            </div>
+
+            {signInError && (
+              <div className="mb-3 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                {signInError}
+              </div>
+            )}
+
+            <div className="mb-4 space-y-2">
+              <button
+                type="button"
                 onClick={() => handleProviderLogin('google')}
-                className="flex w-full items-center justify-center gap-3 rounded-full border border-gray-600 bg-white px-6 py-3 text-black transition-colors hover:bg-gray-100"
+                className="flex w-full items-center justify-center gap-3 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-neutral-900 transition hover:bg-neutral-100"
               >
-                <svg className="h-5 w-5" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                </svg>
-                Continue with Google
+                <span className="text-lg">G</span>
+                <span>Sign in with Google</span>
               </button>
-
               <button
+                type="button"
                 onClick={() => handleProviderLogin('github')}
-                className="flex w-full items-center justify-center gap-3 rounded-full border border-gray-600 bg-white px-6 py-3 text-black transition-colors hover:bg-gray-100"
+                className="flex w-full items-center justify-center gap-3 rounded-full bg-neutral-100 px-4 py-2.5 text-sm font-semibold text-neutral-900 transition hover:bg-white"
               >
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-                </svg>
-                Continue with GitHub
+                <span className="inline-flex h-5 w-5 items-center justify-center">
+                  <Image
+                    src="/github-icon.png"
+                    alt="GitHub"
+                    width={20}
+                    height={20}
+                    className="h-5 w-5"
+                  />
+                </span>
+                <span>Sign in with GitHub</span>
               </button>
             </div>
+
+            <div className="mb-4 flex items-center gap-3 text-neutral-500">
+              <div className="h-px flex-1 bg-neutral-800" />
+              <span className="text-xs font-semibold uppercase tracking-wide">
+                or
+              </span>
+              <div className="h-px flex-1 bg-neutral-800" />
+            </div>
+
+            <form onSubmit={handleSignInSubmit} className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-neutral-400">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={signInEmail}
+                  onChange={(e) => setSignInEmail(e.target.value)}
+                  className="w-full rounded border border-neutral-700 bg-black px-3 py-2 text-sm text-white outline-none ring-sky-500/60 focus:ring-1"
+                  placeholder="you@example.com"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-neutral-400">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={signInPassword}
+                  onChange={(e) => setSignInPassword(e.target.value)}
+                  className="w-full rounded border border-neutral-700 bg-black px-3 py-2 text-sm text-white outline-none ring-sky-500/60 focus:ring-1"
+                  placeholder="Your password"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isSigningIn}
+                className="mt-2 w-full rounded-full bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-600 disabled:opacity-60"
+              >
+                {isSigningIn ? 'Signing in...' : 'Sign in'}
+              </button>
+            </form>
           </div>
         </div>
       )}
     </div>
   );
 }
-

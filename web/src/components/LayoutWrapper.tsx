@@ -16,6 +16,29 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const hasSignedOutRef = useRef(false);
   const [userChecked, setUserChecked] = useState(false);
 
+  const saveCurrentAccountToStorage = (user: any) => {
+    try {
+      if (!user?.userId) return;
+
+      const key = "z_saved_accounts";
+      // Only keep the latest account (this one); no list of past accounts.
+      const next = [
+        {
+          userId: user.userId,
+          displayName: user.displayName ?? user.name ?? user.userId,
+          image: user.image ?? null,
+          provider: user.provider ?? null,
+        },
+      ];
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(key, JSON.stringify(next));
+      }
+    } catch {
+      // ignore storage errors
+    }
+  };
+
   // Check if user has set userId
   useEffect(() => {
     if (!session?.user?.email) {
@@ -35,6 +58,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         if (!data.user?.userId) {
           router.push("/setup-username");
         } else {
+          saveCurrentAccountToStorage(data.user);
           setUserChecked(true);
         }
       })

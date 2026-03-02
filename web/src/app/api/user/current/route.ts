@@ -23,6 +23,13 @@ export async function GET() {
         email: true,
         followersCount: true,
         followingCount: true,
+        lastSignInProvider: true,
+        accounts: {
+          select: {
+            provider: true,
+          },
+          take: 1,
+        },
       },
     });
 
@@ -46,9 +53,21 @@ export async function GET() {
 
     return NextResponse.json({
       user: {
-        ...user,
+        id: user.id,
+        userId: user.userId,
+        name: user.name,
+        displayName: user.displayName,
+        image: user.image,
+        bio: user.bio,
+        email: user.email,
+        followersCount: user.followersCount,
+        followingCount: user.followingCount,
         postsCount: totalPostsCount,
-      }
+        provider:
+          user.lastSignInProvider === "credentials"
+            ? null
+            : user.lastSignInProvider ?? user.accounts[0]?.provider ?? null,
+      },
     });
   } catch (error) {
     console.error("Error fetching current user:", error);
