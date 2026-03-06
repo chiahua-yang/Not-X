@@ -77,9 +77,9 @@ export default function Sidebar() {
       <aside className="w-72 pl-3 pr-6 py-6 flex flex-col" style={{ borderRight: "1px solid #222", height: "100vh" }}>
         <div className="mb-6 text-xl" style={{ color: "var(--color-accent)" }}>Z</div>
         <nav className="flex-1">
-          <NavItem href="/home" label="Home" />
-          <NavItem href="/profile" label="Profile" />
-          <NavItem label="Post" highlight onClick={() => setShowPostModal(true)} />
+          <NavItem href="/home" label="Home" highlight={pathname === "/home"} />
+          <NavItem href="/profile" label="Profile" highlight={pathname === "/profile"} />
+          <NavItem label="Post" highlight={false} onClick={() => setShowPostModal(true)} />
         </nav>
 
         {/* User Profile Card */}

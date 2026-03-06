@@ -16,9 +16,13 @@ export async function triggerPusherEvent(
   data: any
 ) {
   try {
-    console.log(`[Pusher Server] Triggering event:`, { channel, event, data });
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[Pusher Server] Triggering event:`, { channel, event, data });
+    }
     const result = await pusherServer.trigger(channel, event, data);
-    console.log(`[Pusher Server] Event triggered successfully:`, result);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[Pusher Server] Event triggered successfully:`, result);
+    }
   } catch (error) {
     console.error("[Pusher Server] Failed to trigger event:", error);
     throw error;

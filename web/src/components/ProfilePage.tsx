@@ -415,9 +415,11 @@ function EditProfileModal({
   onClose: () => void;
   onSave: (user: any) => void;
 }) {
-  const [step, setStep] = useState(1); // 1: Display Name, 2: Bio
+  const [step, setStep] = useState(0); // 0: Images, 1: Display Name, 2: Bio
   const [displayName, setDisplayName] = useState(user.displayName || user.name || "");
   const [bio, setBio] = useState(user.bio || "");
+  const [image, setImage] = useState(user.image || "");
+  const [coverImage, setCoverImage] = useState(user.coverImage || "");
   const [isFocused, setIsFocused] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -428,7 +430,9 @@ function EditProfileModal({
   }, []);
 
   const handleNext = () => {
-    if (step === 1) {
+    if (step === 0) {
+      setStep(1);
+    } else if (step === 1) {
       setStep(2);
     } else {
       handleSave();
@@ -441,7 +445,7 @@ function EditProfileModal({
       const res = await fetch("/api/user/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName, bio }),
+        body: JSON.stringify({ displayName, bio, image, coverImage }),
       });
 
       if (res.ok) {
@@ -473,12 +477,13 @@ function EditProfileModal({
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: "#333" }}>
           <button
-            onClick={() => step === 1 ? onClose() : setStep(1)}
+            onClick={() => step === 0 ? onClose() : setStep(step - 1)}
             className="text-xl hover:bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center transition"
           >
             ←
           </button>
           <div className="flex items-center gap-1">
+            <div className={`w-2 h-2 rounded-full ${step === 0 ? 'bg-blue-500' : 'bg-gray-600'}`} />
             <div className={`w-2 h-2 rounded-full ${step === 1 ? 'bg-blue-500' : 'bg-gray-600'}`} />
             <div className={`w-2 h-2 rounded-full ${step === 2 ? 'bg-blue-500' : 'bg-gray-600'}`} />
           </div>
@@ -487,7 +492,77 @@ function EditProfileModal({
 
         {/* Content */}
         <div className="p-8" style={{ minHeight: "400px" }}>
-          {step === 1 ? (
+          {step === 0 ? (
+            // Step 0: Images
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-3xl font-bold mb-3">Pick a profile picture and cover</h2>
+                <p className="text-gray-400">
+                  Have a favorite selfie? Upload it now. You can also add a cover image.
+                </p>
+              </div>
+
+              {/* Cover Image Preview */}
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--color-accent)" }}>
+                  Cover Image
+                </label>
+                <div
+                  className="w-full h-32 rounded-lg mb-2"
+                  style={{
+                    background: coverImage
+                      ? `url(${coverImage}) center/cover`
+                      : "linear-gradient(to right, #1e3a8a, #1e40af)",
+                  }}
+                />
+                <input
+                  type="text"
+                  value={coverImage}
+                  onChange={(e) => setCoverImage(e.target.value)}
+                  className="w-full bg-transparent border-2 rounded-lg px-4 py-2 outline-none transition-colors"
+                  style={{
+                    borderColor: "#444",
+                    color: "var(--foreground)"
+                  }}
+                  placeholder="Enter cover image URL"
+                />
+              </div>
+
+              {/* Profile Image Preview */}
+              <div>
+                <label className="block text-sm font-semibold mb-2" style={{ color: "var(--color-accent)" }}>
+                  Profile Picture
+                </label>
+                <div className="flex items-center gap-4 mb-2">
+                  <div
+                    className="w-24 h-24 rounded-full"
+                    style={{
+                      background: image
+                        ? `url(${image}) center/cover`
+                        : "var(--color-primary)",
+                    }}
+                  >
+                    {!image && (
+                      <div className="w-full h-full flex items-center justify-center text-white font-bold text-2xl">
+                        {displayName?.[0]?.toUpperCase() || user.name?.[0]?.toUpperCase() || "?"}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  value={image}
+                  onChange={(e) => setImage(e.target.value)}
+                  className="w-full bg-transparent border-2 rounded-lg px-4 py-2 outline-none transition-colors"
+                  style={{
+                    borderColor: "#444",
+                    color: "var(--foreground)"
+                  }}
+                  placeholder="Enter profile image URL"
+                />
+              </div>
+            </div>
+          ) : step === 1 ? (
             // Step 1: Display Name
             <div className="space-y-6">
               <div>
@@ -588,7 +663,7 @@ function EditProfileModal({
               color: "#fff"
             }}
           >
-            {isSaving ? "Saving..." : step === 1 ? "Next" : "Save"}
+            {isSaving ? "Saving..." : step === 2 ? "Save" : "Next"}
           </button>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
+import { getTotalCommentCount } from "@/lib/postCount";
 
 export async function GET(
   req: NextRequest,
@@ -126,7 +127,17 @@ export async function GET(
       }
     }
 
-    return NextResponse.json(enrichedPost);
+    // Use total comment count (including nested replies) for display
+    const totalComments = await getTotalCommentCount(postId);
+    const response = {
+      ...enrichedPost,
+      _count: {
+        ...(enrichedPost as any)._count,
+        comments: totalComments,
+      },
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error("Error fetching post:", error);
     return NextResponse.json(

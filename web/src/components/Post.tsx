@@ -246,7 +246,7 @@ export default function Post({ post, onLike, onRepost, onComment, onDelete, curr
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
@@ -314,7 +314,9 @@ export default function Post({ post, onLike, onRepost, onComment, onDelete, curr
           </div>
 
           {/* Post content */}
-          <p className="whitespace-pre-wrap break-words mb-3">{parseContent(post.content)}</p>
+          <p className="whitespace-pre-wrap break-words overflow-wrap-anywhere mb-3" style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}>
+            {parseContent(post.content)}
+          </p>
 
           {/* Action buttons */}
           <div className="flex items-center gap-6 text-gray-500">

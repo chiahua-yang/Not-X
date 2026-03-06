@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Post from "@/components/Post";
+import { getPusherClient } from "@/lib/pusher-client";
 
 type PostData = {
   id: string;
@@ -41,6 +42,47 @@ export default function PostDetailPage() {
   useEffect(() => {
     if (!postId) return;
     fetchPost();
+
+    // Subscribe to Pusher for real-time comment updates
+    const pusher = getPusherClient();
+    const channel = pusher.subscribe(`post-${postId}`);
+
+    channel.bind("comment-update", (data: { commentCount: number; newComment?: PostData }) => {
+      console.log(`[PostDetail] Received comment-update:`, data);
+
+      // Update the post's comment count
+      setPost((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          _count: {
+            ...prev._count,
+            comments: data.commentCount,
+          },
+        };
+      });
+
+      // If there's a new comment, add it to the comments list
+      if (data.newComment) {
+        setPost((prev) => {
+          if (!prev) return prev;
+
+          // Check if comment already exists (avoid duplicates)
+          const commentExists = prev.comments.some(c => c.id === data.newComment!.id);
+          if (commentExists) return prev;
+
+          return {
+            ...prev,
+            comments: [...prev.comments, data.newComment!],
+          };
+        });
+      }
+    });
+
+    return () => {
+      channel.unbind_all();
+      channel.unsubscribe();
+    };
   }, [postId]);
 
   const fetchPost = async () => {

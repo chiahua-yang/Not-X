@@ -3,6 +3,11 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { triggerPusherEvent } from "@/lib/pusher";
+import {
+  getRootPostId,
+  getTotalCommentCount,
+  getTotalCommentCounts,
+} from "@/lib/postCount";
 
 export async function POST(req: NextRequest) {
   try {
@@ -65,15 +70,15 @@ export async function POST(req: NextRequest) {
       data: { postsCount: { increment: 1 } },
     });
 
-    // If this is a comment (has parentId), trigger Pusher event for real-time update
+    // If this is a comment (has parentId), trigger Pusher for the root post with total count
     if (parentId) {
-      const commentCount = await prisma.post.count({
-        where: { parentId },
-      });
+      const rootPostId = await getRootPostId(parentId);
+      const commentCount = await getTotalCommentCount(rootPostId);
 
-      await triggerPusherEvent(`post-${parentId}`, "comment-update", {
-        postId: parentId,
+      await triggerPusherEvent(`post-${rootPostId}`, "comment-update", {
+        postId: rootPostId,
         commentCount,
+        newComment: post,
       });
     }
 
@@ -350,6 +355,17 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
       });
     }
+
+    // Replace direct comment count with total (including nested) comment count
+    const postIds = (posts as { id: string }[]).map((p) => p.id);
+    const totalCounts = await getTotalCommentCounts(postIds);
+    posts = (posts as any[]).map((p) => ({
+      ...p,
+      _count: {
+        ...p._count,
+        comments: totalCounts.get(p.id) ?? 0,
+      },
+    }));
 
     return NextResponse.json({ posts });
   } catch (error) {
