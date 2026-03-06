@@ -76,14 +76,14 @@ export async function POST(request: Request) {
         lines.push("Hi,");
       }
       lines.push("");
-      lines.push(`Your verification code for Z Clone is: ${code}`);
+      lines.push(`Your verification code for Not X is: ${code}`);
       lines.push("");
       lines.push(`This code will expire in ${CODE_EXPIRES_MINUTES} minutes.`);
 
       await transporter.sendMail({
         from,
         to: normalizedEmail,
-        subject: "Your Z Clone verification code",
+        subject: "Your Not-X verification code",
         text: lines.join("\n"),
         html: `<p>${lines.join("<br />")}</p>`,
       });

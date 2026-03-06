@@ -1,4 +1,4 @@
-# Z - 社群網站平台
+# Not-X - 社群網站平台
 
 一個功能完整的社群網站平台，實作了發文、留言、按讚、轉發、追蹤等核心功能，並支援即時互動。
 
@@ -220,9 +220,34 @@ web/
 
 1. 推送程式碼到 GitHub
 2. 前往 [Vercel](https://vercel.com/)，導入專案
-3. 設定 Root Directory 為 `web`
-4. 配置環境變數（同 `.env`）
+3. 設定 **Root Directory** 為 `hw5/web`（從 repo 根目錄算起）
+4. 配置環境變數（見下方「長期部署檢查清單」）
 5. 部署！
+
+### 讓 Vercel 連結與設定長期不失效
+
+要讓線上網址穩定、登入與資料庫等設定不失效，請依下列步驟一次設好並保留在 Vercel 與 OAuth 後台。
+
+| 項目 | 說明 |
+|------|------|
+| **Production 網址** | Vercel 的 Production 部署網址（如 `https://xxx.vercel.app`）在未刪專案前不會過期。請固定用 **Production** 分支（通常是 `main`）部署，不要依賴 Preview 網址當正式環境。 |
+| **環境變數全部在 Vercel 設** | 到 **Vercel Dashboard → 你的專案 → Settings → Environment Variables**，把下面清單的變數都設在 **Production**（可順便設 Preview 以利測試）。不要只靠本地 `.env`，否則重新部署或新環境都會失效。 |
+| **NEXTAUTH_URL** | 在 Vercel 上**必須**設成你的 Production 網址，例如 `https://wp1141-swart-gamma.vercel.app`（結尾不要加 `/`）。設成 `localhost` 會導致登入 callback 失敗。 |
+| **NEXTAUTH_SECRET** | 用 `openssl rand -base64 32` 產生一組固定值，在 Vercel 設好後就不要改，否則既有 session 會失效。 |
+| **DATABASE_URL** | 使用 **雲端 PostgreSQL**（Vercel Postgres、Neon、Supabase、Railway 等）。本地 `localhost` 在 Vercel 上無法連線。若用 Vercel Postgres，在 Vercel 專案裡連結後會自動注入。 |
+| **OAuth Redirect URI** | 在 **Google Cloud Console** 與 **GitHub OAuth App** 的授權 callback 中，加入你的 Production 網址：<br>• Google: `https://你的網址/api/auth/callback/google`<br>• GitHub: `https://你的網址/api/auth/callback/github`<br>若之後換了 Vercel 網址，要記得回 OAuth 後台改這兩個 URI，否則登入會失效。 |
+| **Pusher / SMTP** | 與本地相同，把 `PUSHER_*`、`SMTP_*` 等變數在 Vercel Environment Variables 設好即可。 |
+| **Root Directory** | 在 Vercel 專案設定中 **Root Directory** 固定為 `hw5/web`，不要改回 repo 根目錄，否則 build 會失敗。 |
+| **不要刪除專案** | 刪除 Vercel 專案後，該專案的網址會失效。若只是重新部署，同一個專案會沿用同一組 Production 網址。 |
+
+**建議一次檢查清單（部署前）：**
+
+- [ ] Vercel 專案 Root Directory = `hw5/web`
+- [ ] 所有環境變數已在 Vercel 的 **Production** 環境設定
+- [ ] `NEXTAUTH_URL` = 你的 Vercel Production 網址（例如 `https://wp1141-swart-gamma.vercel.app`）
+- [ ] `DATABASE_URL` 為雲端 PostgreSQL 連線字串（非 localhost）
+- [ ] Google / GitHub OAuth 的 Authorized redirect URI 已包含 `https://你的網址/api/auth/callback/google` 與 `.../api/auth/callback/github`
+- [ ] 專案已連接 GitHub，Production 分支為 `main`（或你指定的分支）
 
 ## 📝 常用指令
 

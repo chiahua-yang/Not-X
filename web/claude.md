@@ -1,8 +1,8 @@
-# Z 社群網站平台 - AI 開發指南
+# Not-X 社群網站平台 - AI 開發指南
 
 ## 專案概覽
 
-**專案名稱**: Z (類 Twitter/X 社群網站平台)
+**專案名稱**: Not-X (類 Twitter/X 社群網站平台)
 **線上展示**: https://wp1141-swart-gamma.vercel.app
 **技術棧**: Next.js 16 + TypeScript + Prisma + PostgreSQL + NextAuth.js + Pusher
 **部署平台**: Vercel

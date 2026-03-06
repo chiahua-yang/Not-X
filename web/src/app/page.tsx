@@ -267,10 +267,10 @@ export default function LandingPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-black px-4">
       <div className="w-full max-w-5xl flex flex-col md:flex-row md:items-center md:justify-between gap-12">
-        {/* Left side: big Z logo only */}
+        {/* Left side: Not-X branding */}
         <div className="flex-1 flex items-center justify-center">
           <div className="text-7xl font-extrabold tracking-tight text-white md:text-8xl">
-            Z
+            Not X
           </div>
         </div>
 
@@ -293,7 +293,7 @@ export default function LandingPage() {
           )}
           <div className="mb-8">
             <h1 className="mb-2 text-4xl font-bold text-white md:text-6xl">
-              Happening now
+              Not X
             </h1>
             <h2 className="text-2xl font-semibold text-white md:text-3xl">
               Join today.
@@ -324,7 +324,7 @@ export default function LandingPage() {
                         />
                       ) : (
                         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-700 text-sm font-semibold text-white">
-                          {account.displayName?.charAt(0).toUpperCase() ?? 'Z'}
+                          {account.displayName?.charAt(0).toUpperCase() ?? "N"}
                         </div>
                       )}
                       <div>
