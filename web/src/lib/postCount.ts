@@ -8,10 +8,11 @@ import { prisma } from "@/lib/prisma";
 export async function getRootPostId(postId: string): Promise<string> {
   let currentId: string | null = postId;
   while (currentId) {
-    const post = await prisma.post.findUnique({
-      where: { id: currentId },
-      select: { id: true, parentId: true },
-    });
+    const post: { id: string; parentId: string | null } | null =
+      await prisma.post.findUnique({
+        where: { id: currentId },
+        select: { id: true, parentId: true },
+      });
     if (!post) return postId;
     if (!post.parentId) return post.id;
     currentId = post.parentId;
