@@ -108,8 +108,8 @@
 
 ### 1. Clone 專案
 ```bash
-git clone https://github.com/chiahua-yang/wp1141.git
-cd wp1141/hw5/web
+git clone https://github.com/chiahua-yang/Not-X.git
+cd Not-X/web
 ```
 
 ### 2. 安裝依賴
