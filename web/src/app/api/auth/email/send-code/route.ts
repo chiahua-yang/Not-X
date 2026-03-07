@@ -17,15 +17,12 @@ const createTransport = () => {
 
   const secure = port === 465;
 
-  const options: nodemailer.TransportOptions = {
+  const options = {
     host,
     port,
     secure,
+    ...(user && pass ? { auth: { user, pass } } : {}),
   };
-
-  if (user && pass) {
-    (options as any).auth = { user, pass };
-  }
 
   return nodemailer.createTransport(options);
 };
