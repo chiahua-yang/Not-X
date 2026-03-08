@@ -26,58 +26,64 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
   const [isHoveringFollow, setIsHoveringFollow] = useState(false);
 
   const isOwnProfile = !userId || currentUser?.userId === userId;
+  const sessionUserId = (session?.user as { id?: string } | undefined)?.id;
 
-  // Fetch current user
+  // Own profile: fetch user, posts, and liked posts in parallel (one round-trip wave on Vercel)
   useEffect(() => {
-    if (session?.user?.email) {
-      fetch("/api/user/current")
-        .then((res) => res.json())
-        .then((data) => setCurrentUser(data.user))
-        .catch(console.error);
-    }
-  }, [session]);
+    if (userId || !session?.user?.email || !sessionUserId) return;
 
-  // Fetch profile user
-  useEffect(() => {
-    if (!userId && currentUser) {
-      // Viewing own profile
-      setProfileUser(currentUser);
-      setIsLoading(false);
-    } else if (userId) {
-      // Viewing someone else's profile
-      fetch(`/api/users/${userId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          setProfileUser(data.user);
-          setIsFollowing(data.isFollowing || false);
-          setIsLoading(false);
-        })
-        .catch((err) => {
-          console.error(err);
-          setIsLoading(false);
-        });
-    }
-  }, [userId, currentUser]);
+    setIsLoading(true);
+    Promise.all([
+      fetch("/api/user/current").then((res) => res.json()),
+      fetch(`/api/posts?userId=${sessionUserId}`).then((res) => res.json()),
+      fetch("/api/posts/liked").then((res) => res.json()),
+    ])
+      .then(([userData, postsData, likedData]) => {
+        const user = userData?.user;
+        if (user) {
+          setCurrentUser(user);
+          setProfileUser(user);
+        }
+        setPosts(postsData?.posts ?? []);
+        setLikedPosts(likedData?.posts ?? []);
+      })
+      .catch((err) => {
+        console.error(err);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [userId, session?.user?.email, sessionUserId]);
 
-  // Fetch posts
+  // Viewing someone else's profile
   useEffect(() => {
-    if (!profileUser?.id) return;
+    if (!userId) return;
+
+    setIsLoading(true);
+    fetch(`/api/users/${userId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setProfileUser(data.user);
+        setIsFollowing(data.isFollowing || false);
+      })
+      .catch((err) => {
+        console.error(err);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [userId]);
+
+  // Fetch posts when profileUser is set (for others' profile; own profile already has posts from parallel fetch)
+  useEffect(() => {
+    if (!profileUser?.id || !userId) return;
 
     fetch(`/api/posts?userId=${profileUser.id}`)
       .then((res) => res.json())
       .then((data) => setPosts(data.posts || []))
       .catch(console.error);
-  }, [profileUser]);
+  }, [profileUser?.id, userId]);
 
-  // Fetch liked posts (only for own profile)
-  useEffect(() => {
-    if (!profileUser?.id || !isOwnProfile) return;
-
-    fetch(`/api/posts/liked?userId=${profileUser.id}`)
-      .then((res) => res.json())
-      .then((data) => setLikedPosts(data.posts || []))
-      .catch(console.error);
-  }, [profileUser, isOwnProfile]);
 
   const handleFollow = async () => {
     if (!profileUser?.userId) return;
