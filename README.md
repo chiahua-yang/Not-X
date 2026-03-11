@@ -4,7 +4,7 @@
 
 ## 🚀 部署連結
 
-**線上展示**: https://wp1141-swart-gamma.vercel.app
+**線上展示**:https://not-x-kappa.vercel.app/
 
 ## 📋 功能清單
 
